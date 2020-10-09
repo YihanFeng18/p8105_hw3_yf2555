@@ -42,7 +42,7 @@ instacart %>%
 ```
 
 
-## Make a plot. 
+### Make a plot. 
 
 ```{r}
 instacart %>% 
@@ -58,7 +58,7 @@ instacart %>%
 ```
 
 
-## Make a table. 
+### Make a table. 
 
 ```{r}
 instacart %>% 
@@ -72,7 +72,7 @@ instacart %>%
 ```
 
 
-## Apple vs. Ice cream. 
+### Apple vs. Ice cream. 
 
 ```{r}
 instacart %>% 
@@ -84,3 +84,109 @@ instacart %>%
 		values_from = mean_hour
 	)
 ```
+
+
+
+# Problem 2
+
+
+### Load and tidy the accelerometer data. 
+
+```{r, message = FALSE}
+accel_df <- read_csv("./dataset/accel_data.csv") %>%
+  janitor::clean_names() %>%
+  mutate(weekday_weekend = case_when(
+    day %in% c("Monday", "Tuesday", "Wednesday",  "Thursday", "Friday") ~ "Weekday",
+    day %in% c("Saturday", "Sunday") ~ "Weekend"), 
+    day = factor(day, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>%
+  pivot_longer(
+    activity_1 : activity_1440,
+    names_to = "activity_time",
+    names_prefix = "activity_",
+    values_to = "activity_counts" 
+  ) %>%
+  mutate(activity_time = as.numeric(activity_time))
+```
+
+The accelerometer dataset describes the activity counts for each minute of a 24-hour day starting at midnight of a 63 year-old male with BMI 25. The dataset has `r ncol(accel_df)` variables, which are the week, day id, day, weekday or weekend, activity time, and activity counts. It includes `r nrow(accel_df)` minutes that collected by the accelerometer. 
+
+
+
+### Create total activity variable for each day, and then a table showing these totals. 
+
+```{r}
+accel_day <- accel_df %>%
+  group_by(week, day) %>%
+  summarize(day_activity = sum(activity_counts)) %>%
+  knitr::kable(digits = 1)
+accel_day
+```
+
+The counts tend to be low at the beginning of each week, and then increase to the peak on Friday, and decrease at the weekend. 
+
+
+### Make a single-panel plot to show 24-hour activity time courses for each day. 
+
+```{r}
+accel_hour <- accel_df %>%
+mutate(hour_time = activity_time %/% 60) %>%
+group_by(day, hour_time) %>%
+summarize(hour_counts = mean(activity_counts)) %>%
+  ggplot(aes(x = hour_time, y = hour_counts, color = day)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(0, 4, 8, 12, 16, 20, 24), 
+                     labels = c("12AM", "4AM", "8AM", "12PM", "4PM", "8PM", "12AM")) + 
+  scale_y_continuous(breaks = c(0, 200, 400, 600, 800, 1000), 
+                     labels = c("0", "200", "400", "600", "800", "1000")) +
+  labs(
+    x = "Time of the Day", 
+    y = "Average Activity counts",
+    title = "Activity Counts Recorded for Each Day Hourly"
+  ) + 
+viridis::scale_color_viridis(discrete = TRUE)
+
+accel_hour
+```
+
+According to the graph, the participant has a low and steady activity count, lower than 100, from the midnight to 4AM in the morning. In the next two hours, from 4AM to 6AM, the activity counts increases to about 400, and keeps steady until 6PM. During 6PM and 8PM, the activity counts reach to the peak of the day, and decreases gradually to 100 counts. 
+
+# Problem 3
+
+```{r}
+library(p8105.datasets)
+data("ny_noaa")
+```
+
+## To that end, write a short description of the dataset, noting the size and structure of the data, describing some key variables, and indicating the extent to which missing data is an issue
+
+
+## Do some data cleaning. Create separate variables for year, month, and day. Ensure observations for temperature, precipitation, and snowfall are given in reasonable units. For snowfall, what are the most commonly observed values? Why?
+
+
+## Make a two-panel plot showing the average max temperature in January and in July in each station across years. Is there any observable / interpretable structure? Any outliers?
+ 
+ 
+## Make a two-panel plot showing (i) tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
