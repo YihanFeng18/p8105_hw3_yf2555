@@ -8,6 +8,7 @@ output: github_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(p8105.datasets)
+library(patchwork)
 knitr::opts_chunk$set(
 	fig.width = 6, 
   fig.asp = .6,
@@ -114,7 +115,7 @@ The accelerometer dataset describes the activity counts for each minute of a 24-
 
 ### Create total activity variable for each day, and then a table showing these totals. 
 
-```{r}
+```{r message = FALSE}
 accel_day <- accel_df %>%
   group_by(week, day) %>%
   summarize(day_activity = sum(activity_counts)) %>%
@@ -127,17 +128,16 @@ The counts tend to be low at the beginning of each week, and then increase to th
 
 ### Make a single-panel plot to show 24-hour activity time courses for each day. 
 
-```{r}
+```{r message = FALSE}
 accel_hour <- accel_df %>%
 mutate(hour_time = activity_time %/% 60) %>%
 group_by(day, hour_time) %>%
 summarize(hour_counts = mean(activity_counts)) %>%
   ggplot(aes(x = hour_time, y = hour_counts, color = day)) +
   geom_line() +
-  scale_x_continuous(breaks = c(0, 4, 8, 12, 16, 20, 24), 
+  scale_x_continuous(breaks = seq(0, 24, 4), 
                      labels = c("12AM", "4AM", "8AM", "12PM", "4PM", "8PM", "12AM")) + 
-  scale_y_continuous(breaks = c(0, 200, 400, 600, 800, 1000), 
-                     labels = c("0", "200", "400", "600", "800", "1000")) +
+  scale_y_continuous(breaks = seq(0, 1000, 200)) +
   labs(
     x = "Time of the Day", 
     y = "Average Activity counts",
@@ -158,33 +158,101 @@ library(p8105.datasets)
 data("ny_noaa")
 ```
 
-## Dataset Description
+### Dataset Description
 
 This dataset contains information from NOAA, National Data Center, of weather in New York. The dataset has variables of year, month, date, and weather information, which include precipitation, snow, snow wind, minimum and maximun temperature. There are a total of `r nrow(ny_noaa)` rows in the dataset, and a total of `r ncol(ny_noaa)` columns. 
 
-## Clean the dataset. 
+### Clean the dataset. 
 
-```{r}
-ny_noaa %>%
+```{r message = FALSE}
+noaa_df <- ny_noaa %>%
   janitor::clean_names() %>%
-  separate(date, c("year", "month", "day")) %>%
-    mutate(month = month.abb[as.numeric(month)])
+  separate(date, c("year", "month", "day"), sep = "-") %>%
+    mutate(year = as.numeric(year),
+           month = as.numeric(month), 
+           day = as.numeric(day),
+           tmax = as.numeric(tmax),
+           tmax = tmax/10,
+           tmin = as.numeric(tmin),
+           tmin = tmin/10, 
+           ) %>%
+  rename("prcp_mm" = prcp, "snow_mm" = snow, "snwd_mm" = snwd, "tmax_celcius" = tmax, "tmin_celcius" = tmin)
+
+```
+
+```{r message = FALSE}
+noaa_df %>%
+  group_by(snow_mm) %>%
+  count(snow_mm, name = "n_obs") %>%
+  arrange(desc(n_obs))
+```
+For the snowfall, the most common values are 0 or NA. It might because New York is not snowing everyday. 
+
+### Two-panel plot showing the average maximum temperature in January and in July in each station across years.
+
+```{r message = FALSE}
+noaa_jan_july <- noaa_df %>%
+  filter(as.numeric(month) %in% c(1,7)) %>%
+  group_by(id, year, month) %>%
+  summarize(tmax_mean = mean(tmax_celcius, na.rm = TRUE)) %>%
+  drop_na() %>%
+ggplot(aes(x = year, y = tmax_mean, group = id, color = id)) + 
+  geom_point(alpha = 0.5, show.legend = FALSE) +
+  facet_grid(. ~ month) +
+  scale_x_continuous(breaks = seq(1981, 2010, 3)) + 
+  labs(
+    x = "Year", 
+    y = "Average maximum temperature (celcius)",
+    title = "Average maximum temperature in January"
+  ) + 
+  theme(axis.text.x = element_text(angle = 90)) +
+ggsave("noaa_jan_july_tmax.pdf", noaa_jan_july)
+noaa_jan_july
+```
+
+```{r message = FALSE}
+noaa_tmax_outlier <- noaa_df %>%
+  filter(month %in% c(1,7)) %>%
+  group_by(month, year, id) %>%
+  summarize(tmax_mean = mean(tmax_celcius, na.rm = TRUE)) %>%
+  mutate(q3 = tmax_mean > quantile(tmax_mean, 0.75, na.rm = TRUE) + 3*IQR(tmax_mean, na.rm = TRUE), 
+         q1 = tmax_mean < quantile(tmax_mean, 0.25, na.rm = TRUE) - 3*IQR(tmax_mean, na.rm = TRUE)) %>%
+  summarize(q3 = sum(q3, na.rm = TRUE), 
+            q1 = sum(q1, na.rm = TRUE))
 ```
 
 
-For the snowfall, the most common values are 0 or NA. It might because New York is not snowing everyday. 
-
-## Make a two-panel plot showing the average max temperature in January and in July in each station across years. Is there any observable / interpretable structure? Any outliers?
- 
- 
-## Make a two-panel plot showing (i) tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.
+According to the plot, the mean of maximum temperature in January ranges from -10 to 10 celcius degree, and the mean of maximum temperature in July ranges from 20 to 30 celcius degree, for the majority values recorded. There are several outliers observed, which are calculated based on three times the interquatile range. The January of 1999 and 2004 are recorded for higher maximum temperature, and that of 1993, 2005, and 2008 are recorded for lower maximum temperature; the July of 1984, 1988, and 2004 are recorded for lower maximum temperature. 
 
 
+### Two panel plot showing: 1. maximum and minimum temperature, 2. distribution of snowfall values greater than 0 and less than 100 by year. 
 
+```{r message = FALSE}
+noaa_min_max <- 
+  ggplot(noaa_df, aes(x = tmax_celcius, y = tmin_celcius)) +
+  geom_hex() + 
+  scale_x_continuous(breaks = seq(-40, 60, 20)) +
+  scale_y_continuous(breaks = seq(-40, 60, 20)) +
+  labs(
+    x = "maximum temperature (celcius)",
+    y = "minimum temperature (celcius)",
+    title = "Maximum vs. Minimum Temperature"
+  )
 
+noaa_snow <- noaa_df %>%
+  filter((snow_mm > 0) & (snow_mm < 100)) %>%
+  ggplot(aes(x = as.character(year), y = snow_mm)) +
+  geom_boxplot(alpha = 0.5) +
+  labs(
+    x = "Snowfall (mm)", 
+    y = "Year", 
+    title = "Distribution of Snowfall values Between 0 and 100"
+  ) +
+	theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+ggsave("noaa_snow_year.pdf", noaa_snow)
 
-
-
+noaa_min_max / noaa_snow
+```
 
 
 
